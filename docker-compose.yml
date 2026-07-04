@@ -1,0 +1,36 @@
+services:
+  db:
+    container_name: postgres
+    image: postgres:14.21-alpine
+    ports:
+      - '5432:5432'
+    restart: always
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    depends_on:
+      db: 
+        condition: service_healthy
+    container_name: backend
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8080:8080'
+    restart: always
+    env_file:
+      - "../.env"
+  
+volumes:
+  postgres_data:
