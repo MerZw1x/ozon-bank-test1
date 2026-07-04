@@ -27,8 +27,8 @@ func (r *LinksRepository) Get(ctx context.Context, shortLink string) (*domain.Li
 	if shortLink == "" {
 		return nil, errors.New("short link can not be empty")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	if value, ok := r.shortMap[shortLink]; !ok {
 		return nil, nil
@@ -46,7 +46,17 @@ func (r *LinksRepository) Save(ctx context.Context, originalLink, shortLink stri
 		return nil, errors.New("original link can not be empty")
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if value, ok := r.origMap[originalLink]; ok {
+		return r.shortMap[value], nil
+	}
+
 	if value, ok := r.shortMap[shortLink]; ok {
+		if value.OriginalLink != originalLink {
+			return nil, errors.New("short link collision")
+		}
 		return value, nil
 	}
 
