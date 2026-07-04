@@ -7,11 +7,11 @@ import (
 )
 
 type Config struct {
-	DBUser     string `env:"DATABASE_USER" env-required:"true"`
-	DBHost     string `env:"DATABASE_HOST" env-required:"true"`
-	DBName     string `env:"DATABASE_NAME" env-required:"true"`
-	DBPassword string `env:"DATABASE_PASSWORD" env-required:"true"`
-	DBPort     int    `env:"DATABASE_PORT" env-required:"true"`
+	DBUser     string `env:"DATABASE_USER" env-default:""`
+	DBHost     string `env:"DATABASE_HOST" env-default:""`
+	DBName     string `env:"DATABASE_NAME" env-default:""`
+	DBPassword string `env:"DATABASE_PASSWORD" env-default:""`
+	DBPort     int    `env:"DATABASE_PORT" env-default:"0"`
 
 	ServerPort int `env:"SERVER_PORT" env-required:"true"`
 

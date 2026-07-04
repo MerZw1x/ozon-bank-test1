@@ -6,6 +6,6 @@ import (
 )
 
 type ILinksRepository interface {
-	Get(ctx context.Context, short_link string) (*domain.Link, error)
-	Save(ctx context.Context, original_link, short_link string) (*domain.Link, error)
+	Get(ctx context.Context, shortLink string) (*domain.Link, error)
+	Save(ctx context.Context, originalLink, shortLink string) (*domain.Link, error)
 }

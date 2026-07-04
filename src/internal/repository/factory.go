@@ -1,8 +1,20 @@
 package repository
 
-func NewLinksRepository(storageType string, dbdsn string) (*ILinksRepository, error) {
+import (
+	"backend/src/internal/repository/postgre"
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+func NewLinksRepository(storageType string, conn *pgxpool.Pool) (ILinksRepository, error) {
+	var repo ILinksRepository
 	switch storageType {
 	case "postgres":
-	case "local"
+		repo = postgre.NewLinksRepository(conn)
+	case "local":
+	default:
+		return nil, errors.New("invalid storage type")
 	}
+	return repo, nil
 }
