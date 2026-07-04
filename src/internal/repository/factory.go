@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"backend/src/internal/repository/local"
 	"backend/src/internal/repository/postgre"
 	"errors"
 
@@ -8,13 +9,12 @@ import (
 )
 
 func NewLinksRepository(storageType string, conn *pgxpool.Pool) (ILinksRepository, error) {
-	var repo ILinksRepository
 	switch storageType {
 	case "postgres":
-		repo = postgre.NewLinksRepository(conn)
+		return postgre.NewLinksRepository(conn), nil
 	case "local":
+		return local.NewLinksRepository(), nil
 	default:
 		return nil, errors.New("invalid storage type")
 	}
-	return repo, nil
 }
