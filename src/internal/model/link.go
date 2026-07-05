@@ -2,21 +2,27 @@ package model
 
 import (
 	"backend/src/internal/domain"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+var (
+	ErrNotFound      = errors.New("link not found")
+	ErrLinkCollision = errors.New("short link collision")
+)
+
 type Link struct {
-	Id           uuid.UUID `json:"id"`
-	OriginalLink string    `json:"original_link"`
-	ShortLink    string    `json:"short_link"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           uuid.UUID
+	OriginalLink string
+	ShortLink    string
+	CreatedAt    time.Time
 }
 
-func (l *Link) ToDomain() *domain.Link {
-	return &domain.Link{
-		Id:           l.Id,
+func (l Link) ToDomain() domain.Link {
+	return domain.Link{
+		ID:           l.ID,
 		OriginalLink: l.OriginalLink,
 		ShortLink:    l.ShortLink,
 		CreatedAt:    l.CreatedAt,

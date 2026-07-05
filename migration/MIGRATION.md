@@ -14,22 +14,22 @@ go install github.com/pressly/goose/v3/cmd/goose@latest
 
 ```bash
 # Посмотреть статус миграций
-sh scripts/migrations.sh --status
+sh migration/migrations.sh --status
 
 # Создать новую миграцию
-sh scripts/migrations.sh --new <название_миграции>
+sh migration/migrations.sh --new <название_миграции>
  
 # Накатить все миграции
-sh scripts/migrations.sh --up
+sh migration/migrations.sh --up
 
 # Откатить последнюю миграцию
-sh scripts/migrations.sh --down
+sh migration/migrations.sh --down
 
 # Накатить до конкретной версии
-sh scripts/migrations.sh --up <версия>
+sh migration/migrations.sh --up <версия>
 
 # Откатить до конкретной версии
-sh scripts/migrations.sh --down <версия>
+sh migration/migrations.sh --down <версия>
 
 ```
 
@@ -37,11 +37,11 @@ sh scripts/migrations.sh --down <версия>
 
 ``` bash
 # Запускаем docker compose
-docker compose up -d test_db
+docker compose up -d db
 
 # Накатываем миграции
-sh scripts/migrations.sh --up
+sh migration/migrations.sh --up
 
 # Проверяем статус
-sh scripts/migrations.sh --status
+sh migration/migrations.sh --status
 ```

@@ -11,7 +11,7 @@ type Config struct {
 	DBHost     string `env:"DATABASE_HOST" env-default:""`
 	DBName     string `env:"DATABASE_NAME" env-default:""`
 	DBPassword string `env:"DATABASE_PASSWORD" env-default:""`
-	DBPort     int    `env:"DATABASE_PORT" env-default:"0"`
+	DBPort     int    `env:"DATABASE_PORT" env-default:"5432"`
 
 	ServerPort int `env:"SERVER_PORT" env-required:"true"`
 

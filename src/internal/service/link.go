@@ -2,114 +2,68 @@ package service
 
 import (
 	"backend/src/internal/domain"
-	"backend/src/internal/repository"
-	"backend/src/internal/repository/local"
+	"backend/src/internal/model"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"strings"
+	"fmt"
+	"hash/fnv"
 )
 
 const (
-	alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
-	base     = uint64(len(alphabet))
+	alphabet   = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
+	base       = uint64(len(alphabet))
+	shortLen   = 10
+	maxRetries = 5
 )
 
-type ILinkService interface {
-	SaveLink(ctx context.Context, originalLink string) (*domain.Link, error)
-	GetLink(ctx context.Context, shortLink string) (*domain.Link, error)
+type LinksRepository interface {
+	Get(ctx context.Context, shortLink string) (domain.Link, error)
+	Save(ctx context.Context, originalLink, shortLink string) (domain.Link, error)
 }
 
 type LinksService struct {
-	repo repository.ILinksRepository
+	repo LinksRepository
 }
 
-func NewLinksService(repo repository.ILinksRepository) *LinksService {
-	return &LinksService{
-		repo: repo,
-	}
+func NewLinksService(repo LinksRepository) *LinksService {
+	return &LinksService{repo: repo}
 }
 
-func (s *LinksService) SaveLink(ctx context.Context, originalLink string) (*domain.Link, error) {
-	if originalLink == "" {
-		return nil, errors.New("original link can not be empty")
-	}
-
-	var link *domain.Link
-	var err error
-
-	for i := 0; i < 3; i++ {
-		shortLink := generateShortLink(originalLink)
-		link, err = s.repo.Save(context.Background(), originalLink, shortLink)
-		if err != nil {
-			if errors.Is(err, local.ErrLinkCollision) {
-				continue
-			}
-			return nil, err
+func (s *LinksService) Shorten(ctx context.Context, originalLink string) (domain.Link, error) {
+	for i := 0; i < maxRetries; i++ {
+		short := generateShortLink(originalLink, i)
+		link, err := s.repo.Save(ctx, originalLink, short)
+		if err == nil {
+			return link, nil
 		}
-		break
-	}
-
-	return link, nil
-}
-
-func (s *LinksService) GetLink(ctx context.Context, shortLink string) (*domain.Link, error) {
-	if shortLink == "" {
-		return nil, errors.New("short link can not be empty")
-	}
-
-	link, err := s.repo.Get(context.Background(), shortLink)
-	if err != nil {
-		return nil, err
-	}
-
-	return link, nil
-}
-
-func generateShortLink(originalLink string) string {
-	if originalLink == "" {
-		return ""
-	}
-
-	hash := sha256.Sum256([]byte(originalLink))
-
-	num := binary.BigEndian.Uint64(hash[:8])
-
-	code := encodeBase62(num)
-
-	if len(code) < 10 {
-		code = strings.Repeat("0", 10-len(code)) + code
-	} else if len(code) > 10 {
-		maxVal := uint64(1)
-		for i := 0; i < 10; i++ {
-			maxVal *= base
-		}
-
-		num = num % maxVal
-		code = encodeBase62(num)
-		if len(code) < 10 {
-			code += strings.Repeat("0", 10-len(code))
+		if !errors.Is(err, model.ErrLinkCollision) {
+			return domain.Link{}, err
 		}
 	}
-
-	return code
+	return domain.Link{}, fmt.Errorf("failed to generate unique short link after %d attempts", maxRetries)
 }
 
-func encodeBase62(num uint64) string {
-	if num == 0 {
-		return string(alphabet[0])
-	}
+func (s *LinksService) GetOriginal(ctx context.Context, shortLink string) (domain.Link, error) {
+	return s.repo.Get(ctx, shortLink)
+}
 
-	var result []byte
-	for num > 0 {
-		result = append(result, alphabet[num%base])
-		num /= base
+func generateShortLink(originalLink string, salt int) string {
+	h := fnv.New64a()
+	h.Write([]byte(originalLink))
+	if salt > 0 {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(salt))
+		h.Write(buf[:])
 	}
+	return encode(h.Sum64())
+}
 
-	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
-		result[i], result[j] = result[j], result[i]
+func encode(n uint64) string {
+	var b [shortLen]byte
+	for i := shortLen - 1; i >= 0; i-- {
+		b[i] = alphabet[n%base]
+		n /= base
 	}
-
-	return string(result)
+	return string(b[:])
 }

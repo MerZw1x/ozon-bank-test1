@@ -1,6 +1,5 @@
 services:
   db:
-    container_name: postgres
     image: postgres:14.21-alpine
     ports:
       - '5432:5432'
@@ -18,12 +17,26 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  migrator:
+    image: ghcr.io/kukymbr/goose-docker:3.24.1
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=host=db port=5432 user=${DATABASE_USER} password=${DATABASE_PASSWORD} dbname=${DATABASE_NAME} sslmode=disable
+    volumes:
+      - ./migration:/migrations
+    command: ["up"]
+    restart: "no"
+
   backend:
     depends_on:
-      db: 
+      db:
         condition: service_healthy
-    container_name: backend
-    build: 
+      migrator:
+        condition: service_completed_successfully
+    build:
       context: .
       dockerfile: Dockerfile
     ports:
@@ -31,6 +44,8 @@ services:
     restart: always
     env_file:
       - ".env"
-  
+    environment:
+      - DATABASE_HOST=db
+
 volumes:
   postgres_data:

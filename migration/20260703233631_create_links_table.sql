@@ -1,12 +1,10 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS links (
-    id  UUID PRIMARY KEY               DEFAULT gen_random_uuid(),
-    original_link TEXT UNIQUE NOT NULL,
-    short_link VARCHAR(10) UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id            UUID PRIMARY KEY       DEFAULT gen_random_uuid(),
+    original_link TEXT        NOT NULL UNIQUE,
+    short_link    VARCHAR(10) NOT NULL UNIQUE,
+    created_at    TIMESTAMPTZ NOT NULL   DEFAULT NOW()
 );
 
-CREATE INDEX idx_short_links ON links (short_link);
-
 -- +goose Down
-DROP TABLE IF EXISTS links
+DROP TABLE IF EXISTS links;

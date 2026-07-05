@@ -7,7 +7,7 @@ import (
 )
 
 type Link struct {
-	Id           uuid.UUID
+	ID           uuid.UUID
 	OriginalLink string
 	ShortLink    string
 	CreatedAt    time.Time

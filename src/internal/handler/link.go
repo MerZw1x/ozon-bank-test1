@@ -1,73 +1,84 @@
 package handler
 
 import (
-	"backend/src/internal/dto"
-	"backend/src/internal/service"
-	"net/url"
+	"backend/src/internal/domain"
+	"backend/src/internal/model"
+	"context"
+	"errors"
 
+	validation "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/gofiber/fiber/v2"
 )
 
-type LinksHandler struct {
-	service service.ILinkService
+type LinksService interface {
+	Shorten(ctx context.Context, originalLink string) (domain.Link, error)
+	GetOriginal(ctx context.Context, shortLink string) (domain.Link, error)
 }
 
-func NewLinkHandler(service service.ILinkService) *LinksHandler {
+type LinksHandler struct {
+	service LinksService
+}
+
+func NewLinksHandler(service LinksService) *LinksHandler {
 	return &LinksHandler{service: service}
 }
 
-func (h *LinksHandler) Shorten(c *fiber.Ctx) error {
-	var req dto.SaveLinkRequest
-	var res dto.SaveLinkResponse
-
-	if err := c.BodyParser(&req); err != nil {
-		res.Error = "invalid request body"
-		return c.Status(fiber.StatusBadRequest).JSON(res)
-	}
-
-	if req.URL == "" {
-		res.Error = "url is required"
-		return c.Status(fiber.StatusBadRequest).JSON(res)
-	}
-
-	parsedURL, err := url.ParseRequestURI(req.URL)
-	if err != nil || parsedURL.Scheme == "" {
-		res.Error = "invalid URL format"
-		return c.Status(fiber.StatusBadRequest).JSON(res)
-	}
-
-	link, err := h.service.SaveLink(c.Context(), req.URL)
-	if err != nil {
-		res.Error = "failed to shorten URL"
-		return c.Status(fiber.StatusInternalServerError).JSON(res)
-	}
-
-	status := fiber.StatusOK
-
-	res.ShortLink = link.ShortLink
-	return c.Status(status).JSON(res)
+func (h *LinksHandler) Register(app *fiber.App) {
+	app.Post("/shorten", h.Shorten)
+	app.Get("/:shortLink", h.Get)
 }
 
-func (h *LinksHandler) Redirect(c *fiber.Ctx) error {
-	var res dto.RedirectResponse
+type shortenRequest struct {
+	URL string `json:"url"`
+}
 
-	shortLink := c.Params("shortLink")
-	if shortLink == "" {
-		res.Error = "short link is required"
-		return c.Status(fiber.StatusBadRequest).JSON(res)
+type shortenResponse struct {
+	ShortLink string `json:"short_link"`
+}
+
+type getResponse struct {
+	OriginalLink string `json:"original_url"`
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func validateShortenReq(req shortenRequest) error {
+	return validation.ValidateStruct(&req,
+		validation.Field(&req.URL, validation.Required, is.URL),
+	)
+}
+
+func (h *LinksHandler) Shorten(c *fiber.Ctx) error {
+	var req shortenRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errorResponse{Error: "invalid request body"})
 	}
 
-	link, err := h.service.GetLink(c.Context(), shortLink)
+	if err := validateShortenReq(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errorResponse{Error: err.Error()})
+	}
+
+	link, err := h.service.Shorten(c.Context(), req.URL)
 	if err != nil {
-		res.Error = "failed to retrieve original URL"
-		return c.Status(fiber.StatusInternalServerError).JSON(res)
+		return c.Status(fiber.StatusInternalServerError).JSON(errorResponse{Error: "failed to shorten URL"})
 	}
 
-	if link == nil {
-		res.Error = "short link not found"
-		return c.Status(fiber.StatusNotFound).JSON(res)
+	return c.Status(fiber.StatusOK).JSON(shortenResponse{ShortLink: link.ShortLink})
+}
+
+func (h *LinksHandler) Get(c *fiber.Ctx) error {
+	shortLink := c.Params("shortLink")
+
+	link, err := h.service.GetOriginal(c.Context(), shortLink)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(errorResponse{Error: "short link not found"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(errorResponse{Error: "failed to retrieve original URL"})
 	}
 
-	res.OriginalLink = link.OriginalLink
-	return c.JSON(res)
+	return c.JSON(getResponse{OriginalLink: link.OriginalLink})
 }

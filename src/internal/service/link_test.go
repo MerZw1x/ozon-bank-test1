@@ -2,10 +2,10 @@ package service
 
 import (
 	"backend/src/internal/domain"
-	"backend/src/internal/repository/local"
+	"backend/src/internal/model"
 	"context"
+	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -13,170 +13,117 @@ import (
 )
 
 type mockRepository struct {
-	saveFunc func(ctx context.Context, originalLink, shortLink string) (*domain.Link, error)
-	getFunc  func(ctx context.Context, shortLink string) (*domain.Link, error)
+	saveFunc func(ctx context.Context, originalLink, shortLink string) (domain.Link, error)
+	getFunc  func(ctx context.Context, shortLink string) (domain.Link, error)
 }
 
-func (m *mockRepository) Save(ctx context.Context, originalLink, shortLink string) (*domain.Link, error) {
-	if m.saveFunc != nil {
-		return m.saveFunc(ctx, originalLink, shortLink)
-	}
-	return nil, nil
+func (m *mockRepository) Save(ctx context.Context, originalLink, shortLink string) (domain.Link, error) {
+	return m.saveFunc(ctx, originalLink, shortLink)
 }
 
-func (m *mockRepository) Get(ctx context.Context, shortLink string) (*domain.Link, error) {
-	if m.getFunc != nil {
-		return m.getFunc(ctx, shortLink)
-	}
-	return nil, nil
+func (m *mockRepository) Get(ctx context.Context, shortLink string) (domain.Link, error) {
+	return m.getFunc(ctx, shortLink)
 }
 
-func (m *mockRepository) Close() error {
-	return nil
-}
-
-func TestLinksService_SaveLink_Success(t *testing.T) {
+func TestShorten_Success(t *testing.T) {
 	original := "https://example.com"
-	expectedShort := "abc123def0"
-	expectedLink := &domain.Link{
-		Id:           uuid.New(),
-		OriginalLink: original,
-		ShortLink:    expectedShort,
-		CreatedAt:    time.Now(),
-	}
 
 	mock := &mockRepository{
-		saveFunc: func(ctx context.Context, orig, short string) (*domain.Link, error) {
-			return expectedLink, nil
+		saveFunc: func(_ context.Context, orig, short string) (domain.Link, error) {
+			assert.Len(t, short, shortLen)
+			return domain.Link{ID: uuid.New(), OriginalLink: orig, ShortLink: short}, nil
 		},
 	}
 
-	svc := NewLinksService(mock)
-	ctx := context.Background()
-
-	link, err := svc.SaveLink(ctx, original)
+	link, err := NewLinksService(mock).Shorten(context.Background(), original)
 	require.NoError(t, err)
-	require.NotNil(t, link)
-	assert.Equal(t, expectedLink.ShortLink, link.ShortLink)
-	assert.Equal(t, expectedLink.OriginalLink, link.OriginalLink)
+	assert.Equal(t, original, link.OriginalLink)
+	assert.Len(t, link.ShortLink, shortLen)
 }
 
-func TestLinksService_SaveLink_Duplicate(t *testing.T) {
-	original := "https://example.com"
-	var firstSaved *domain.Link
+func TestShorten_Deterministic(t *testing.T) {
+	assert.Equal(t, generateShortLink("https://example.com", 0), generateShortLink("https://example.com", 0))
+	assert.NotEqual(t, generateShortLink("https://example.com", 0), generateShortLink("https://example.com", 1))
+	assert.NotEqual(t, generateShortLink("https://a.com", 0), generateShortLink("https://b.com", 0))
+}
 
+func TestShorten_CollisionRetry(t *testing.T) {
+	original := "https://example.com"
+	firstShort := generateShortLink(original, 0)
+
+	calls := 0
 	mock := &mockRepository{
-		saveFunc: func(ctx context.Context, orig, short string) (*domain.Link, error) {
-			if firstSaved == nil {
-				firstSaved = &domain.Link{
-					Id:           uuid.New(),
-					OriginalLink: orig,
-					ShortLink:    short,
-					CreatedAt:    time.Now(),
-				}
-				return firstSaved, nil
+		saveFunc: func(_ context.Context, orig, short string) (domain.Link, error) {
+			calls++
+			if short == firstShort {
+				return domain.Link{}, model.ErrLinkCollision
 			}
-			return firstSaved, nil
+			return domain.Link{ID: uuid.New(), OriginalLink: orig, ShortLink: short}, nil
 		},
 	}
 
-	svc := NewLinksService(mock)
-	ctx := context.Background()
-
-	first, err := svc.SaveLink(ctx, original)
+	link, err := NewLinksService(mock).Shorten(context.Background(), original)
 	require.NoError(t, err)
-	require.NotNil(t, first)
-
-	second, err := svc.SaveLink(ctx, original)
-	require.NoError(t, err)
-	require.NotNil(t, second)
-
-	assert.Equal(t, first.Id, second.Id)
-	assert.Equal(t, first.ShortLink, second.ShortLink)
+	assert.NotEqual(t, firstShort, link.ShortLink)
+	assert.Equal(t, 2, calls)
 }
 
-func TestLinksService_SaveLink_CollisionRetry(t *testing.T) {
-	original := "https://example.com"
+func TestShorten_CollisionExhausted(t *testing.T) {
 	mock := &mockRepository{
-		saveFunc: func(ctx context.Context, orig, short string) (*domain.Link, error) {
-			if short == "abc123def0" {
-				return nil, local.ErrLinkCollision
-			}
-
-			return &domain.Link{
-				Id:           uuid.New(),
-				OriginalLink: orig,
-				ShortLink:    short,
-				CreatedAt:    time.Now(),
-			}, nil
+		saveFunc: func(_ context.Context, _, _ string) (domain.Link, error) {
+			return domain.Link{}, model.ErrLinkCollision
 		},
 	}
 
-	svc := NewLinksService(mock)
-	ctx := context.Background()
-
-	link, err := svc.SaveLink(ctx, original)
-	require.NoError(t, err)
-	require.NotNil(t, link)
-	assert.NotEmpty(t, link.ShortLink)
-}
-
-func TestLinksService_SaveLink_EmptyOriginal(t *testing.T) {
-	svc := NewLinksService(&mockRepository{})
-	ctx := context.Background()
-
-	link, err := svc.SaveLink(ctx, "")
+	_, err := NewLinksService(mock).Shorten(context.Background(), "https://example.com")
 	assert.Error(t, err)
-	assert.Nil(t, link)
-	assert.EqualError(t, err, "original link can not be empty")
-}
-func TestLinksService_GetLink_EmptyShort(t *testing.T) {
-	svc := NewLinksService(&mockRepository{})
-	ctx := context.Background()
-
-	link, err := svc.GetLink(ctx, "")
-	assert.Error(t, err)
-	assert.Nil(t, link)
-	assert.EqualError(t, err, "short link can not be empty")
 }
 
-func TestLinksService_GetLink_Success(t *testing.T) {
-	short := "abc123"
-	expectedLink := &domain.Link{
-		Id:           uuid.New(),
-		OriginalLink: "https://example.com",
-		ShortLink:    short,
-		CreatedAt:    time.Now(),
+func TestShorten_RepoError(t *testing.T) {
+	repoErr := errors.New("boom")
+	mock := &mockRepository{
+		saveFunc: func(_ context.Context, _, _ string) (domain.Link, error) {
+			return domain.Link{}, repoErr
+		},
 	}
 
+	_, err := NewLinksService(mock).Shorten(context.Background(), "https://example.com")
+	assert.ErrorIs(t, err, repoErr)
+}
+
+func TestGetOriginal_Success(t *testing.T) {
+	short := "abc1234567"
+	expected := domain.Link{ID: uuid.New(), OriginalLink: "https://example.com", ShortLink: short}
+
 	mock := &mockRepository{
-		getFunc: func(ctx context.Context, s string) (*domain.Link, error) {
+		getFunc: func(_ context.Context, s string) (domain.Link, error) {
 			assert.Equal(t, short, s)
-			return expectedLink, nil
+			return expected, nil
 		},
 	}
 
-	svc := NewLinksService(mock)
-	ctx := context.Background()
-
-	link, err := svc.GetLink(ctx, short)
+	link, err := NewLinksService(mock).GetOriginal(context.Background(), short)
 	require.NoError(t, err)
-	require.NotNil(t, link)
-	assert.Equal(t, expectedLink.ShortLink, link.ShortLink)
-	assert.Equal(t, expectedLink.OriginalLink, link.OriginalLink)
+	assert.Equal(t, expected, link)
 }
 
-func TestLinksService_GetLink_NotFound(t *testing.T) {
+func TestGetOriginal_NotFound(t *testing.T) {
 	mock := &mockRepository{
-		getFunc: func(ctx context.Context, s string) (*domain.Link, error) {
-			return nil, nil
+		getFunc: func(_ context.Context, _ string) (domain.Link, error) {
+			return domain.Link{}, model.ErrNotFound
 		},
 	}
 
-	svc := NewLinksService(mock)
-	ctx := context.Background()
+	_, err := NewLinksService(mock).GetOriginal(context.Background(), "nonexistent")
+	assert.ErrorIs(t, err, model.ErrNotFound)
+}
 
-	link, err := svc.GetLink(ctx, "nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, link)
+func TestGenerateShortLink_AlphabetOnly(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		short := generateShortLink("https://example.com/"+string(rune('a'+i%26)), i)
+		assert.Len(t, short, shortLen)
+		for _, ch := range short {
+			assert.Contains(t, alphabet, string(ch))
+		}
+	}
 }
