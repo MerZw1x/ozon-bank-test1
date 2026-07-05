@@ -26,7 +26,7 @@ func NewLinksService(repo repository.ILinksRepository) *LinksService {
 	}
 }
 
-func (s *LinksService) SaveLink(originalLink string) (*domain.Link, error) {
+func (s *LinksService) SaveLink(ctx context.Context, originalLink string) (*domain.Link, error) {
 	if originalLink == "" {
 		return nil, errors.New("original link can not be empty")
 	}
@@ -49,7 +49,7 @@ func (s *LinksService) SaveLink(originalLink string) (*domain.Link, error) {
 	return link, nil
 }
 
-func (s *LinksService) GetLink(shortLink string) (*domain.Link, error) {
+func (s *LinksService) GetLink(ctx context.Context, shortLink string) (*domain.Link, error) {
 	if shortLink == "" {
 		return nil, errors.New("short link can not be empty")
 	}
