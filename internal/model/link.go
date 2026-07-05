@@ -1,7 +1,7 @@
 package model
 
 import (
-	"backend/src/internal/domain"
+	"backend/internal/domain"
 	"errors"
 	"time"
 
@@ -14,10 +14,10 @@ var (
 )
 
 type Link struct {
-	ID           uuid.UUID `json:"id"`
-	OriginalLink string    `json:"original_link"`
-	ShortLink    string    `json:"short_link"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           uuid.UUID `db:"id"`
+	OriginalLink string    `db:"original_link"`
+	ShortLink    string    `db:"short_link"`
+	CreatedAt    time.Time `db:"created_at"`
 }
 
 func (l Link) ToDomain() domain.Link {

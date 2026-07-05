@@ -1,8 +1,8 @@
 package service
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -20,6 +20,7 @@ const (
 type LinksRepository interface {
 	Get(ctx context.Context, shortLink string) (domain.Link, error)
 	Save(ctx context.Context, originalLink, shortLink string) (domain.Link, error)
+	Ping(ctx context.Context) error
 }
 
 type LinksService struct {
@@ -46,6 +47,10 @@ func (s *LinksService) Shorten(ctx context.Context, originalLink string) (domain
 
 func (s *LinksService) GetOriginal(ctx context.Context, shortLink string) (domain.Link, error) {
 	return s.repo.Get(ctx, shortLink)
+}
+
+func (s *LinksService) Ping(ctx context.Context) error {
+	return s.repo.Ping(ctx)
 }
 
 func generateShortLink(originalLink string, salt int) string {

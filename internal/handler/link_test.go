@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -22,6 +22,7 @@ import (
 type mockService struct {
 	shortenFunc func(ctx context.Context, url string) (domain.Link, error)
 	getFunc     func(ctx context.Context, shortLink string) (domain.Link, error)
+	pingFunc    func(ctx context.Context) error
 }
 
 func (m *mockService) Shorten(ctx context.Context, url string) (domain.Link, error) {
@@ -30,6 +31,13 @@ func (m *mockService) Shorten(ctx context.Context, url string) (domain.Link, err
 
 func (m *mockService) GetOriginal(ctx context.Context, shortLink string) (domain.Link, error) {
 	return m.getFunc(ctx, shortLink)
+}
+
+func (m *mockService) Ping(ctx context.Context) error {
+	if m.pingFunc == nil {
+		return nil
+	}
+	return m.pingFunc(ctx)
 }
 
 func setupApp(svc LinksService) *fiber.App {
@@ -152,4 +160,23 @@ func TestGetHandler_ServiceError(t *testing.T) {
 	resp := do(t, app, "GET", "/abc1234567", nil)
 	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
 	assert.Equal(t, "failed to retrieve original URL", decode(t, resp)["error"])
+}
+
+func TestHealthHandler_OK(t *testing.T) {
+	app := setupApp(&mockService{})
+
+	resp := do(t, app, "GET", "/health", nil)
+	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+	assert.Equal(t, "ok", decode(t, resp)["status"])
+}
+
+func TestHealthHandler_Unavailable(t *testing.T) {
+	app := setupApp(&mockService{
+		pingFunc: func(_ context.Context) error {
+			return errors.New("db down")
+		},
+	})
+
+	resp := do(t, app, "GET", "/health", nil)
+	assert.Equal(t, fiber.StatusServiceUnavailable, resp.StatusCode)
 }

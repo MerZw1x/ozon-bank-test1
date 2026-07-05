@@ -27,6 +27,13 @@
 - `404 Not Found` — `{ "error": "short link not found" }`
 - `500 Internal Server Error` — ошибка на стороне сервиса
 
+### `GET /health` — проверка живости
+
+Проверяет доступность хранилища (для `postgres` — пинг пула соединений).
+
+- `200 OK` — `{ "status": "ok" }`
+- `503 Service Unavailable` — хранилище недоступно
+
 ## Запуск
 
 ### 1. Через docker-compose (postgres)
@@ -50,7 +57,7 @@ make build
 
 ```bash
 export $(cat .env | xargs)
-go run ./src/cmd
+go run ./cmd
 ```
 
 ## Переменные окружения

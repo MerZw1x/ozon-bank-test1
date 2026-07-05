@@ -1,9 +1,15 @@
 package config
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/ilyakaznacheev/cleanenv"
+)
+
+const (
+	StoragePostgres = "postgres"
+	StorageLocal    = "local"
 )
 
 type Config struct {
@@ -24,6 +30,12 @@ func Load() (*Config, error) {
 	err := cleanenv.ReadEnv(cfg)
 	if err != nil {
 		return nil, err
+	}
+
+	switch cfg.Storage {
+	case StoragePostgres, StorageLocal:
+	default:
+		return nil, fmt.Errorf("invalid STORAGE %q: must be %q or %q", cfg.Storage, StoragePostgres, StorageLocal)
 	}
 
 	return cfg, nil

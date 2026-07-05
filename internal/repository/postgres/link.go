@@ -1,8 +1,8 @@
-package postgre
+package postgres
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"context"
 	"errors"
 
@@ -18,6 +18,10 @@ type LinksRepository struct {
 
 func NewLinksRepository(pool *pgxpool.Pool) *LinksRepository {
 	return &LinksRepository{pool: pool}
+}
+
+func (r *LinksRepository) Ping(ctx context.Context) error {
+	return r.pool.Ping(ctx)
 }
 
 func (r *LinksRepository) Get(ctx context.Context, shortLink string) (domain.Link, error) {

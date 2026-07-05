@@ -1,7 +1,7 @@
 package local
 
 import (
-	"backend/src/internal/model"
+	"backend/internal/model"
 	"context"
 	"fmt"
 	"sync"

@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"context"
 	"errors"
 	"log/slog"
@@ -15,6 +15,7 @@ import (
 type LinksService interface {
 	Shorten(ctx context.Context, originalLink string) (domain.Link, error)
 	GetOriginal(ctx context.Context, shortLink string) (domain.Link, error)
+	Ping(ctx context.Context) error
 }
 
 type LinksHandler struct {
@@ -27,6 +28,7 @@ func NewLinksHandler(service LinksService, log *slog.Logger) *LinksHandler {
 }
 
 func (h *LinksHandler) Register(app *fiber.App) {
+	app.Get("/health", h.Health)
 	app.Post("/shorten", h.Shorten)
 	app.Get("/:shortLink", h.Get)
 }
@@ -51,6 +53,14 @@ func validateShortenReq(req shortenRequest) error {
 	return validation.ValidateStruct(&req,
 		validation.Field(&req.URL, validation.Required, is.URL),
 	)
+}
+
+func (h *LinksHandler) Health(c *fiber.Ctx) error {
+	if err := h.service.Ping(c.Context()); err != nil {
+		h.log.Error("health check failed", "error", err)
+		return c.Status(fiber.StatusServiceUnavailable).JSON(errorResponse{Error: "unavailable"})
+	}
+	return c.JSON(fiber.Map{"status": "ok"})
 }
 
 func (h *LinksHandler) Shorten(c *fiber.Ctx) error {

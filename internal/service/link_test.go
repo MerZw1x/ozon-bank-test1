@@ -1,8 +1,8 @@
 package service
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"context"
 	"errors"
 	"testing"
@@ -23,6 +23,10 @@ func (m *mockRepository) Save(ctx context.Context, originalLink, shortLink strin
 
 func (m *mockRepository) Get(ctx context.Context, shortLink string) (domain.Link, error) {
 	return m.getFunc(ctx, shortLink)
+}
+
+func (m *mockRepository) Ping(_ context.Context) error {
+	return nil
 }
 
 func TestShorten_Success(t *testing.T) {

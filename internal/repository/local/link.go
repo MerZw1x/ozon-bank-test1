@@ -1,8 +1,8 @@
 package local
 
 import (
-	"backend/src/internal/domain"
-	"backend/src/internal/model"
+	"backend/internal/domain"
+	"backend/internal/model"
 	"context"
 	"sync"
 	"time"
@@ -21,6 +21,10 @@ func NewLinksRepository() *LinksRepository {
 		shortMap: make(map[string]model.Link),
 		origMap:  make(map[string]string),
 	}
+}
+
+func (r *LinksRepository) Ping(_ context.Context) error {
+	return nil
 }
 
 func (r *LinksRepository) Get(_ context.Context, shortLink string) (domain.Link, error) {
