@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,7 +34,8 @@ func (m *mockService) GetOriginal(ctx context.Context, shortLink string) (domain
 
 func setupApp(svc LinksService) *fiber.App {
 	app := fiber.New()
-	NewLinksHandler(svc).Register(app)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	NewLinksHandler(svc, logger).Register(app)
 	return app
 }
 

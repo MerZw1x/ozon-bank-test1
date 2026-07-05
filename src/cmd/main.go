@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +25,8 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	repo, cleanup, err := newRepository(cfg)
 	if err != nil {
 		log.Fatalf("init repository: %v", err)
@@ -31,7 +34,7 @@ func main() {
 	defer cleanup()
 
 	linksService := service.NewLinksService(repo)
-	linksHandler := handler.NewLinksHandler(linksService)
+	linksHandler := handler.NewLinksHandler(linksService, logger)
 
 	app := fiber.New()
 	linksHandler.Register(app)

@@ -5,6 +5,7 @@ import (
 	"backend/src/internal/model"
 	"context"
 	"errors"
+	"log/slog"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -18,10 +19,11 @@ type LinksService interface {
 
 type LinksHandler struct {
 	service LinksService
+	log     *slog.Logger
 }
 
-func NewLinksHandler(service LinksService) *LinksHandler {
-	return &LinksHandler{service: service}
+func NewLinksHandler(service LinksService, log *slog.Logger) *LinksHandler {
+	return &LinksHandler{service: service, log: log}
 }
 
 func (h *LinksHandler) Register(app *fiber.App) {
@@ -63,6 +65,7 @@ func (h *LinksHandler) Shorten(c *fiber.Ctx) error {
 
 	link, err := h.service.Shorten(c.Context(), req.URL)
 	if err != nil {
+		h.log.Error("shorten failed", "url", req.URL, "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(errorResponse{Error: "failed to shorten URL"})
 	}
 
@@ -77,6 +80,7 @@ func (h *LinksHandler) Get(c *fiber.Ctx) error {
 		if errors.Is(err, model.ErrNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(errorResponse{Error: "short link not found"})
 		}
+		h.log.Error("get original failed", "short_link", shortLink, "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(errorResponse{Error: "failed to retrieve original URL"})
 	}
 
