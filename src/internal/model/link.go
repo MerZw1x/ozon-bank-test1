@@ -14,10 +14,10 @@ var (
 )
 
 type Link struct {
-	ID           uuid.UUID
-	OriginalLink string
-	ShortLink    string
-	CreatedAt    time.Time
+	ID           uuid.UUID `json:"id"`
+	OriginalLink string    `json:"original_link"`
+	ShortLink    string    `json:"short_link"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (l Link) ToDomain() domain.Link {
