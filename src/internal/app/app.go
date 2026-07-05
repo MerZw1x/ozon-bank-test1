@@ -2,6 +2,9 @@ package app
 
 import (
 	"backend/src/internal/config"
+	"backend/src/internal/handler"
+	"backend/src/internal/repository"
+	"backend/src/internal/service"
 	"context"
 	"log"
 	"os"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func Run() {
@@ -19,12 +23,35 @@ func Run() {
 		log.Fatal(err)
 	}
 
-	app := fiber.New()
+	var repo repository.ILinksRepository
 
 	switch cfg.Storage {
 	case "postgres":
+		pool, err := pgxpool.New(context.Background(), cfg.GetDBDSN())
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		repo, err = repository.NewLinksRepository("postgres", pool)
+		if err != nil {
+			log.Fatal(err)
+		}
 	case "local":
+		repo, err = repository.NewLinksRepository("local", nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+	default:
+		log.Fatal("unknown storage type: %w", cfg.Storage)
 	}
+
+	linkService := service.NewLinksService(repo)
+	linkHandler := handler.NewLinkHandler(linkService)
+
+	app := fiber.New()
+
+	app.Post("/shorten", linkHandler.Shorten)
+	app.Get("/:shortLink", linkHandler.Redirect)
 
 	go func() {
 		if err := app.Listen(":" + strconv.Itoa(cfg.ServerPort)); err != nil {
