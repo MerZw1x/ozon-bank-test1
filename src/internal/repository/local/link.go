@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrLinkCollision error = errors.New("short link collision")
+
 type LinksRepository struct {
 	mu       sync.RWMutex
 	shortMap map[string]*domain.Link
@@ -55,7 +57,7 @@ func (r *LinksRepository) Save(ctx context.Context, originalLink, shortLink stri
 
 	if value, ok := r.shortMap[shortLink]; ok {
 		if value.OriginalLink != originalLink {
-			return nil, errors.New("short link collision")
+			return nil, ErrLinkCollision
 		}
 		return value, nil
 	}

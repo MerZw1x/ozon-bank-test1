@@ -3,9 +3,17 @@ package service
 import (
 	"backend/src/internal/domain"
 	"backend/src/internal/repository"
+	"backend/src/internal/repository/local"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"strings"
+)
+
+const (
+	alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
+	base     = uint64(len(alphabet))
 )
 
 type LinksService struct {
@@ -23,11 +31,19 @@ func (s *LinksService) SaveLink(originalLink string) (*domain.Link, error) {
 		return nil, errors.New("original link can not be empty")
 	}
 
-	shortLink := generateShortLink(originalLink)
+	var link *domain.Link
+	var err error
 
-	link, err := s.repo.Save(context.Background(), originalLink, shortLink)
-	if err != nil {
-		return nil, err
+	for i := 0; i < 3; i++ {
+		shortLink := generateShortLink(originalLink)
+		link, err = s.repo.Save(context.Background(), originalLink, shortLink)
+		if err != nil {
+			if errors.Is(err, local.ErrLinkCollision) {
+				continue
+			}
+			return nil, err
+		}
+		break
 	}
 
 	return link, nil
@@ -52,5 +68,43 @@ func generateShortLink(originalLink string) string {
 	}
 
 	hash := sha256.Sum256([]byte(originalLink))
-	return string(hash[:10])
+
+	num := binary.BigEndian.Uint64(hash[:8])
+
+	code := encodeBase62(num)
+
+	if len(code) < 10 {
+		code = strings.Repeat("0", 10-len(code)) + code
+	} else if len(code) > 10 {
+		maxVal := uint64(1)
+		for i := 0; i < 10; i++ {
+			maxVal *= base
+		}
+
+		num = num % maxVal
+		code = encodeBase62(num)
+		if len(code) < 10 {
+			code += strings.Repeat("0", 10-len(code))
+		}
+	}
+
+	return code
+}
+
+func encodeBase62(num uint64) string {
+	if num == 0 {
+		return string(alphabet[0])
+	}
+
+	var result []byte
+	for num > 0 {
+		result = append(result, alphabet[num%base])
+		num /= base
+	}
+
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+
+	return string(result)
 }
