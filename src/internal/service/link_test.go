@@ -63,27 +63,20 @@ func TestLinksService_SaveLink_Success(t *testing.T) {
 
 func TestLinksService_SaveLink_Duplicate(t *testing.T) {
 	original := "https://example.com"
-	existingShort := "abc123"
-	existingLink := &domain.Link{
-		Id:           uuid.New(),
-		OriginalLink: original,
-		ShortLink:    existingShort,
-		CreatedAt:    time.Now(),
-	}
+	var firstSaved *domain.Link
 
-	callCount := 0
 	mock := &mockRepository{
 		saveFunc: func(ctx context.Context, orig, short string) (*domain.Link, error) {
-			if callCount == 0 {
-				callCount++
-				return &domain.Link{
+			if firstSaved == nil {
+				firstSaved = &domain.Link{
 					Id:           uuid.New(),
 					OriginalLink: orig,
 					ShortLink:    short,
 					CreatedAt:    time.Now(),
-				}, nil
+				}
+				return firstSaved, nil
 			}
-			return existingLink, nil
+			return firstSaved, nil
 		},
 	}
 
@@ -98,6 +91,7 @@ func TestLinksService_SaveLink_Duplicate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, second)
 
+	assert.Equal(t, first.Id, second.Id)
 	assert.Equal(t, first.ShortLink, second.ShortLink)
 }
 

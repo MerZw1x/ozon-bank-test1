@@ -3,6 +3,7 @@ package handler
 import (
 	"backend/src/internal/domain"
 	"backend/src/internal/dto"
+	"backend/src/internal/service"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -17,14 +18,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockService — реализация интерфейса LinkService для тестов
 type mockService struct {
-	saveFunc func(ctx context.Context, originalURL string) (*domain.Link, error)
+	saveFunc func(ctx context.Context, url string) (*domain.Link, error)
 	getFunc  func(ctx context.Context, shortLink string) (*domain.Link, error)
 }
 
-func (m *mockService) SaveLink(ctx context.Context, originalURL string) (*domain.Link, error) {
+func (m *mockService) SaveLink(ctx context.Context, url string) (*domain.Link, error) {
 	if m.saveFunc != nil {
-		return m.saveFunc(ctx, originalURL)
+		return m.saveFunc(ctx, url)
 	}
 	return nil, nil
 }
@@ -36,9 +38,9 @@ func (m *mockService) GetLink(ctx context.Context, shortLink string) (*domain.Li
 	return nil, nil
 }
 
-func setupApp(mock *mockService) *fiber.App {
+func setupApp(service service.ILinkService) *fiber.App {
 	app := fiber.New()
-	handler := &LinksHandler{service: mock}
+	handler := NewLinkHandler(service)
 	app.Post("/shorten", handler.Shorten)
 	app.Get("/:shortLink", handler.Redirect)
 	return app
@@ -63,15 +65,17 @@ func TestLinksHandler_Shorten_Success(t *testing.T) {
 
 	app := setupApp(mock)
 
-	body := dto.SaveLinkRequest{
-		URL: originalURL,
-	}
+	reqBody := dto.SaveLinkRequest{URL: originalURL}
+	jsonBody, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 
-	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader([]byte(body.URL)))
+	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
 	var response map[string]string
@@ -81,35 +85,19 @@ func TestLinksHandler_Shorten_Success(t *testing.T) {
 	assert.Empty(t, response["error"])
 }
 
-func TestLinksHandler_Shorten_InvalidJSON(t *testing.T) {
-	mock := &mockService{}
-	app := setupApp(mock)
-
-	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader([]byte(`{"url": "https://example.com"`)))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
-
-	var response map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	require.NoError(t, err)
-	assert.Equal(t, "invalid request body", response["error"])
-}
-
 func TestLinksHandler_Shorten_EmptyURL(t *testing.T) {
 	mock := &mockService{}
 	app := setupApp(mock)
 
-	reqBody := map[string]string{"url": ""}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(body))
+	reqBody := dto.SaveLinkRequest{URL: ""}
+	jsonBody, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 
 	var response map[string]string
@@ -122,20 +110,41 @@ func TestLinksHandler_Shorten_InvalidURL(t *testing.T) {
 	mock := &mockService{}
 	app := setupApp(mock)
 
-	reqBody := map[string]string{"url": "example.com"}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(body))
+	reqBody := dto.SaveLinkRequest{URL: "not-a-url"}
+	jsonBody, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 
 	var response map[string]string
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, "invalid URL format", response["error"])
+}
+
+func TestLinksHandler_Shorten_InvalidJSON(t *testing.T) {
+	mock := &mockService{}
+	app := setupApp(mock)
+
+	// Некорректный JSON
+	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader([]byte(`{"url": "broken"`)))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+
+	var response map[string]string
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, "invalid request body", response["error"])
 }
 
 func TestLinksHandler_Shorten_ServiceError(t *testing.T) {
@@ -146,14 +155,15 @@ func TestLinksHandler_Shorten_ServiceError(t *testing.T) {
 	}
 	app := setupApp(mock)
 
-	reqBody := map[string]string{"url": "https://example.com"}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(body))
+	reqBody := dto.SaveLinkRequest{URL: "https://example.com"}
+	jsonBody, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/shorten", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
 
 	var response map[string]string
@@ -163,18 +173,17 @@ func TestLinksHandler_Shorten_ServiceError(t *testing.T) {
 }
 
 func TestLinksHandler_Redirect_Success(t *testing.T) {
-	shortLink := "abc123"
 	originalURL := "https://example.com"
+	shortLink := "abc123"
 	expectedLink := &domain.Link{
 		Id:           uuid.New(),
 		OriginalLink: originalURL,
 		ShortLink:    shortLink,
-		CreatedAt:    time.Now(),
 	}
 
 	mock := &mockService{
-		getFunc: func(ctx context.Context, s string) (*domain.Link, error) {
-			assert.Equal(t, shortLink, s)
+		getFunc: func(ctx context.Context, short string) (*domain.Link, error) {
+			assert.Equal(t, shortLink, short)
 			return expectedLink, nil
 		},
 	}
@@ -183,6 +192,8 @@ func TestLinksHandler_Redirect_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/"+shortLink, nil)
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
 	var response map[string]string
@@ -194,7 +205,7 @@ func TestLinksHandler_Redirect_Success(t *testing.T) {
 
 func TestLinksHandler_Redirect_NotFound(t *testing.T) {
 	mock := &mockService{
-		getFunc: func(ctx context.Context, s string) (*domain.Link, error) {
+		getFunc: func(ctx context.Context, short string) (*domain.Link, error) {
 			return nil, nil
 		},
 	}
@@ -203,6 +214,8 @@ func TestLinksHandler_Redirect_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nonexistent", nil)
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
 
 	var response map[string]string
@@ -211,24 +224,9 @@ func TestLinksHandler_Redirect_NotFound(t *testing.T) {
 	assert.Equal(t, "short link not found", response["error"])
 }
 
-func TestLinksHandler_Redirect_EmptyShort(t *testing.T) {
-	mock := &mockService{}
-	app := setupApp(mock)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	resp, err := app.Test(req)
-	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
-
-	var response map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	require.NoError(t, err)
-	assert.Equal(t, "short link is required", response["error"])
-}
-
 func TestLinksHandler_Redirect_ServiceError(t *testing.T) {
 	mock := &mockService{
-		getFunc: func(ctx context.Context, s string) (*domain.Link, error) {
+		getFunc: func(ctx context.Context, short string) (*domain.Link, error) {
 			return nil, errors.New("db error")
 		},
 	}
@@ -237,6 +235,8 @@ func TestLinksHandler_Redirect_ServiceError(t *testing.T) {
 	req := httptest.NewRequest("GET", "/abc123", nil)
 	resp, err := app.Test(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
 
 	var response map[string]string

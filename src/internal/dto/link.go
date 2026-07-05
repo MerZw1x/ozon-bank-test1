@@ -10,6 +10,6 @@ type SaveLinkResponse struct {
 }
 
 type RedirectResponse struct {
-	OriginalLink string `json:"original_link"`
+	OriginalLink string `json:"original_url"`
 	Error        string `json:"error"`
 }

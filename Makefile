@@ -1,6 +1,6 @@
 COMPOSE := docker-compose -f docker-compose.yml
 
-.PHONY: down up build clean
+.PHONY: down up build clean test
 
 down:
 	${COMPOSE} down
@@ -14,3 +14,5 @@ build:
 clean:
 	${COMPOSE} down -v --rmi all
 	
+test:
+	go test -v ./...
