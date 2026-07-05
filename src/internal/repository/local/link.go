@@ -11,6 +11,8 @@ import (
 )
 
 var ErrLinkCollision error = errors.New("short link collision")
+var ErrShortLinkIsEmpty error = errors.New("short link can not be empty")
+var ErrOrigLinkIsEmpty error = errors.New("original link can not be empty")
 
 type LinksRepository struct {
 	mu       sync.RWMutex
@@ -27,7 +29,7 @@ func NewLinksRepository() *LinksRepository {
 
 func (r *LinksRepository) Get(ctx context.Context, shortLink string) (*domain.Link, error) {
 	if shortLink == "" {
-		return nil, errors.New("short link can not be empty")
+		return nil, ErrShortLinkIsEmpty
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -41,11 +43,11 @@ func (r *LinksRepository) Get(ctx context.Context, shortLink string) (*domain.Li
 
 func (r *LinksRepository) Save(ctx context.Context, originalLink, shortLink string) (*domain.Link, error) {
 	if shortLink == "" {
-		return nil, errors.New("short link can not be empty")
+		return nil, ErrShortLinkIsEmpty
 	}
 
 	if originalLink == "" {
-		return nil, errors.New("original link can not be empty")
+		return nil, ErrOrigLinkIsEmpty
 	}
 
 	r.mu.Lock()
