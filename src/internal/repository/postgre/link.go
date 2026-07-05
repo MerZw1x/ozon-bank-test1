@@ -42,8 +42,10 @@ func (r *LinksRepository) Get(ctx context.Context, shortLink string) (*domain.Li
 }
 
 func (r *LinksRepository) Save(ctx context.Context, originalLink, shortLink string) (*domain.Link, error) {
-	sqlStr := `INSERT INTO link (original_link, short_link)
+	sqlStr := `INSERT INTO links (original_link, short_link)
 				VALUES ($1, $2)
+				ON CONFLICT (original_link) DO UPDATE 
+				SET short_link = EXCLUDED.short_link
 				RETURNING id, original_link, short_link, created_at`
 
 	link := &model.Link{}

@@ -38,7 +38,7 @@ func (h *LinksHandler) Shorten(c *fiber.Ctx) error {
 
 	link, err := h.service.SaveLink(c.Context(), req.URL)
 	if err != nil {
-		res.Error = "failed to shorten URL"
+		res.Error = "failed to shorten URL: " + err.Error()
 		return c.Status(fiber.StatusInternalServerError).JSON(res)
 	}
 
