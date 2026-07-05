@@ -16,6 +16,11 @@ const (
 	base     = uint64(len(alphabet))
 )
 
+type ILinkService interface {
+	SaveLink(ctx context.Context, originalLink string) (*domain.Link, error)
+	GetLink(ctx context.Context, shortLink string) (*domain.Link, error)
+}
+
 type LinksService struct {
 	repo repository.ILinksRepository
 }

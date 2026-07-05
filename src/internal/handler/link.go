@@ -9,10 +9,10 @@ import (
 )
 
 type LinksHandler struct {
-	service *service.LinksService
+	service service.ILinkService
 }
 
-func NewLinkHandler(service *service.LinksService) *LinksHandler {
+func NewLinkHandler(service service.ILinkService) *LinksHandler {
 	return &LinksHandler{service: service}
 }
 
